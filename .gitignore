@@ -1,5 +1,5 @@
-.music/
-.__pycache__/
-\.replit
+music/
+__pycache__/
+*.replit
 poetry.lock
 pyproject.toml
