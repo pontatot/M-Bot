@@ -1,0 +1,12 @@
+{
+    "help": "Sends this page",
+    "ping": "Sends bot ping",
+    "join": "Joins the channel you are in or the one you give the id to",
+    "leave": "Leaves the channel I am currently in",
+    "pause": "Pauses or resume the song depending on if it is already paused or not",
+    "stop": "Stops the playing of current song",
+    "download": "Downloads the song from youtube, needs a link",
+    "find": "Finds songs matching the keyword from the downloaded songs, needs a keyword",
+    "list": "Lists all the downloaded songs",
+    "play": "Plays the song matching the keyword, needs a keyword"
+}
