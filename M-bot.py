@@ -5,6 +5,14 @@ import youtube_dl
 import random
 import json
 from keep_alive import keep_alive
+import os
+import discord
+from discord import channel
+from discord.ext import commands
+from discord import FFmpegPCMAudio
+from youtube_dl import YoutubeDL
+import random
+import json
 
 bot = commands.Bot(command_prefix=">")
 
@@ -13,6 +21,17 @@ with open("help.json", "r") as help_file:
 
 #get a string from the message list
 sortname = lambda message, init=1, end=None : " ".join(list(message[init:end]))
+
+
+
+queue = {}
+
+loop = 2
+currentSong = {}
+YDL_OPTIONS = {'format': 'bestaudio', 'noplaylist': 'True'}
+FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
+
+
 
 #extract id from discord mentions
 def getid(message):
@@ -33,6 +52,19 @@ def listToString(files):
     for i in range(len(files)):
         result += str(i+1) + ") " + files[i] + "\n"
     return result
+
+
+def playNext(ctx, currentUrl):
+    voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
+    print("playNext gets called")
+    if voice:
+        if not (voice.is_playing() or voice.is_paused()):
+            if loop == 2:
+                voice.play(FFmpegPCMAudio(currentUrl, **FFMPEG_OPTIONS), after=lambda e: playNext(ctx, currentUrl))
+                # embed = discord.Embed(title="Now playing", description="[" + currentSong['title'] + "](https://youtu.be/" + currentSong['id'] + ")\nin " + ctx.guild.voice_client.channel.mention, colour=0x79A4F9)
+                # await ctx.channel.send(content=None, embed=embed)
+
+
 
 @bot.event
 async def on_ready():
@@ -69,17 +101,18 @@ async def join(ctx, id: int = 0):
     voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
     if id != 0:
         channel = bot.get_channel(id)
-        await channel.connect()
-        embed = discord.Embed(title="Joined voice channel", description=channel.mention, colour=0x79A4F9)
-        await ctx.channel.send(content=None, embed=embed)
     elif ctx.author.voice:
         channel = ctx.author.voice.channel
-        await channel.connect()
-        embed = discord.Embed(title="Joined voice channel", description=channel.mention, colour=0x79A4F9)
-        await ctx.channel.send(content=None, embed=embed)
     else:
         embed = discord.Embed(title="Could not join voice channel", description="Make sure you are connected to a voice channel", colour=0x79A4F9)
         await ctx.channel.send(content=None, embed=embed)
+        return
+    if voice and voice.is_connected():
+        await voice.move_to(channel)
+    else:
+        voice = await channel.connect()
+    embed = discord.Embed(title="Joined voice channel", description=channel.mention, colour=0x79A4F9)
+    await ctx.channel.send(content=None, embed=embed)
 
 
 @bot.command()
@@ -116,6 +149,22 @@ async def pause(ctx):
 
 
 @bot.command()
+async def resume(ctx):
+    voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
+    if voice:
+        if voice.is_paused():
+            voice.resume()
+            embed = discord.Embed(title="Resumed", description="", colour=0x79A4F9)
+            await ctx.channel.send(content=None, embed=embed)
+        else:
+            embed = discord.Embed(title="Not playing audio", description="", colour=0x79A4F9)
+            await ctx.channel.send(content=None, embed=embed)
+    else:
+        embed = discord.Embed(title="Currently not in a voice channel", description="", colour=0x79A4F9)
+        await ctx.channel.send(content=None, embed=embed)
+
+
+@bot.command()
 async def stop(ctx):
     voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
     if voice:
@@ -125,47 +174,6 @@ async def stop(ctx):
     else:
         embed = discord.Embed(title="Currently not in a voice channel", description="", colour=0x79A4F9)
         await ctx.channel.send(content=None, embed=embed)
-
-
-@bot.command()
-async def download(ctx, link: str = ""):
-    if link != "":
-        if link.startswith("https://"):
-            embed = discord.Embed(title="Downloading song", description=link, colour=0x79A4F9)
-            mess = await ctx.channel.send(content=None, embed=embed)
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192'
-                }]
-            }
-            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([link])
-            for file in os.listdir("./"):
-                if file.endswith(".mp3"):
-                    os.rename(file, "music/" + file)
-            embed = discord.Embed(title="Finished downloading", description=link, colour=0x79A4F9)
-            await mess.edit(content=None, embed=embed)
-
-
-@bot.command()
-async def find(ctx, arg: str = ""):
-    files = findSong(arg)
-    embed = discord.Embed(title="Song not found", description="Check if you have any typo or download the song if it isn't downloaded yet", colour=0x79A4F9)
-    if len(files) == 1:
-        embed = discord.Embed(title="One song found", description=files[0], colour=0x79A4F9)
-    elif len(files) > 1:
-        embed = discord.Embed(title=str(len(files)) + " songs found", description=listToString(files), colour=0x79A4F9)
-    await ctx.channel.send(content=None, embed=embed)
-
-
-@bot.command()
-async def list(ctx):
-    files = os.listdir("./music/")
-    embed = discord.Embed(title="Current downloaded songs", description=listToString(files), colour=0x79A4F9)
-    await ctx.channel.send(content=None, embed=embed)
 
 
 @bot.command()
@@ -183,30 +191,20 @@ async def play(ctx, arg: str = ""):
                 embed = discord.Embed(title="Currently not in a voice channel", description="join a voice channel or make me join", colour=0x79A4F9)
                 await ctx.channel.send(content=None, embed=embed)
                 return
+        elif voice.is_paused() or voice.is_playing():
+            voice.stop()
         voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
         if voice:
-            if arg.lower() == "random":
-                filetoplay = os.listdir("./music/")[random.randint(0, len(os.listdir("./music/")) - 1)]
-            else:
-                files = findSong(arg)
-                if len(files) == 1:
-                    filetoplay = files[0]
-                elif len(files) > 1:
-                    embed = discord.Embed(title="Multiple music found", description="be more precise in the selection\n" + listToString(files), colour=0x79A4F9)
-                    await ctx.channel.send(content=None, embed=embed)
-                    return
-                else:
-                    embed = discord.Embed(title="Music not found", description="Check if you have any typo or download the song if it isn't downloaded yet", colour=0x79A4F9)
-                    await ctx.channel.send(content=None, embed=embed)
-                    return
+            with YoutubeDL(YDL_OPTIONS) as ydl:
+                info = ydl.extract_info(arg, download=False)
+            #print(info)
+            currentSong = info
+            currentUrl = currentSong['url']
+            #, after=await playNext(ctx)
+            voice.play(FFmpegPCMAudio(currentUrl, **FFMPEG_OPTIONS), after=lambda e: playNext(ctx, currentUrl))
+            embed = discord.Embed(title="Now playing", description="[" + info['title'] + "](" + arg + ")\nin " + ctx.guild.voice_client.channel.mention, colour=0x79A4F9)
+            await ctx.channel.send(content=None, embed=embed)
 
-
-            if filetoplay:
-                if voice.is_playing():
-                    voice.stop()
-                voice.play(discord.FFmpegPCMAudio("./music/" + filetoplay))
-                embed = discord.Embed(title="Now playing", description=filetoplay + " in " + ctx.guild.voice_client.channel.mention, colour=0x79A4F9)
-                await ctx.channel.send(content=None, embed=embed)
 
 
     else:
@@ -232,7 +230,6 @@ async def help(ctx):
         help += "**" + key + ":** " + helpPage[key] + "\n"
     embed = discord.Embed(title="Help page", description=help, colour=0x79A4F9)
     await ctx.channel.send(content=None, embed=embed)
-
 
 keep_alive()
 bot.run(os.getenv('token'))
