@@ -189,11 +189,7 @@ async def play(ctx, arg: str = ""):
         if voice:
             with YoutubeDL(YDL_OPTIONS) as ydl:
                 info = ydl.extract_info(arg, download=False)
-            #print(info)
-            currentSong = info
-            currentUrl = currentSong['url']
-            #, after=await playNext(ctx)
-            voice.play(FFmpegPCMAudio(currentUrl, **FFMPEG_OPTIONS), after=lambda e: playNext(ctx, currentUrl))
+            playNext(ctx, info['url'])
             embed = discord.Embed(title="Now playing", description="[" + info['title'] + "](" + arg + ")\nin " + ctx.guild.voice_client.channel.mention, colour=0x79A4F9)
             await ctx.channel.send(content=None, embed=embed)
 
