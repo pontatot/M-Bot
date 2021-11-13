@@ -1,18 +1,10 @@
 import os
 import discord
 from discord.ext import commands
-import youtube_dl
-import random
 import json
 from keep_alive import keep_alive
-import os
-import discord
-from discord import channel
-from discord.ext import commands
 from discord import FFmpegPCMAudio
 from youtube_dl import YoutubeDL
-import random
-import json
 
 bot = commands.Bot(command_prefix=">")
 
