@@ -4,9 +4,13 @@
     "join": "Joins the channel you are in or the one you give the id to",
     "leave": "Leaves the channel I am currently in",
     "pause": "Pauses or resume the song depending on if it is already paused or not",
+    "resume": "Resumes the song",
     "stop": "Stops the playing of current song",
-    "download": "Downloads the song from youtube, needs a link",
-    "find": "Finds songs matching the keyword from the downloaded songs, needs a keyword",
-    "list": "Lists all the downloaded songs",
-    "play": "Plays the song matching the keyword, needs a keyword"
+    "play": "Queues the song",
+    "queue": "Shows the queue",
+    "skip": "Skips to the next song in the queue",
+    "previous": "Goes back to the previous song in the queue",
+    "loop": "Changes the loop type (not loopin, loop queue, loop current song)",
+    "remove": "removes the song from the queue",
+    "jump": "jumps to the song in the queue"
 }

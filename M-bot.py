@@ -15,11 +15,10 @@ with open("help.json", "r") as help_file:
 sortname = lambda message, init=1, end=None : " ".join(list(message[init:end]))
 
 
+songQueue = []
+currentPos = 0
 
-queue = {}
-
-loop = 2
-currentSong = {}
+loopType = 1
 YDL_OPTIONS = {'format': 'bestaudio', 'noplaylist': 'True'}
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
 
@@ -46,15 +45,18 @@ def listToString(files):
     return result
 
 
-def playNext(ctx, currentUrl):
+def playNext(ctx):
     voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
-    print("playNext gets called")
+    global currentPos
     if voice:
         if not (voice.is_playing() or voice.is_paused()):
-            if loop == 2:
-                voice.play(FFmpegPCMAudio(currentUrl, **FFMPEG_OPTIONS), after=lambda e: playNext(ctx, currentUrl))
-                # embed = discord.Embed(title="Now playing", description="[" + currentSong['title'] + "](https://youtu.be/" + currentSong['id'] + ")\nin " + ctx.guild.voice_client.channel.mention, colour=0x79A4F9)
-                # await ctx.channel.send(content=None, embed=embed)
+            if loopType == 2:
+                voice.play(FFmpegPCMAudio(songQueue[currentPos][2], **FFMPEG_OPTIONS), after=lambda e: playNext(ctx))
+            elif loopType == 1:
+                currentPos += 1
+                if currentPos >= len(songQueue):
+                    currentPos = 0
+                voice.play(FFmpegPCMAudio(songQueue[currentPos][2], **FFMPEG_OPTIONS), after=lambda e: playNext(ctx))
 
 
 
@@ -109,7 +111,6 @@ async def join(ctx, id: int = 0):
 
 @bot.command()
 async def leave(ctx):
-    voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
     if ctx.guild.voice_client:
         channel = ctx.guild.voice_client
         await channel.disconnect()
@@ -160,6 +161,12 @@ async def resume(ctx):
 async def stop(ctx):
     voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
     if voice:
+        global loopType
+        loopType = 0
+        global songQueue
+        songQueue = {}
+        global currentPos
+        currentPos = 0
         voice.stop()
         embed = discord.Embed(title="Stopped", description="", colour=0x79A4F9)
         await ctx.channel.send(content=None, embed=embed)
@@ -183,13 +190,12 @@ async def play(ctx, arg: str = ""):
                 embed = discord.Embed(title="Currently not in a voice channel", description="join a voice channel or make me join", colour=0x79A4F9)
                 await ctx.channel.send(content=None, embed=embed)
                 return
-        elif voice.is_paused() or voice.is_playing():
-            voice.stop()
         voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
         if voice:
             with YoutubeDL(YDL_OPTIONS) as ydl:
                 info = ydl.extract_info(arg, download=False)
-            playNext(ctx, info['url'])
+            songQueue.append([info['title'], "https://youtu.be/" + info['id'], info['url']])
+            playNext(ctx)
             embed = discord.Embed(title="Now playing", description="[" + info['title'] + "](" + arg + ")\nin " + ctx.guild.voice_client.channel.mention, colour=0x79A4F9)
             await ctx.channel.send(content=None, embed=embed)
 
@@ -218,6 +224,90 @@ async def help(ctx):
         help += "**" + key + ":** " + helpPage[key] + "\n"
     embed = discord.Embed(title="Help page", description=help, colour=0x79A4F9)
     await ctx.channel.send(content=None, embed=embed)
+
+@bot.command()
+async def queue(ctx):
+    queue = ""
+    if len(songQueue) > 1:
+        for i in range(len(songQueue)):
+            if i == currentPos:
+                queue += "**_" + str(i + 1) + ") [" + songQueue[i][0] + "](" + songQueue[i][1] + ")_**\n"
+            else:
+                queue += str(i + 1) + ") [" + songQueue[i][0] + "](" + songQueue[i][1] + ")\n"
+    else:
+        queue = "Queue is empty"
+    embed = discord.Embed(title="Current queue", description=queue, colour=0x79A4F9)
+    await ctx.channel.send(content=None, embed=embed)
+
+
+@bot.command()
+async def skip(ctx):
+    voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
+    if voice:
+        pos = currentPos + 1
+        if pos >= len(songQueue):
+            pos = 0
+        voice.stop()
+        embed = discord.Embed(title="Skipped", description="[" + songQueue[pos][0] + "](" + songQueue[pos][1] + ")\n", colour=0x79A4F9)
+        await ctx.channel.send(content=None, embed=embed)
+
+@bot.command()
+async def previous(ctx):
+    voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
+    if voice:
+        global currentPos
+        currentPos -= 2
+        if currentPos < 0:
+            currentPos = len(songQueue) + currentPos
+        pos = currentPos + 1
+        if pos >= len(songQueue):
+            pos = 0
+        voice.stop()
+        embed = discord.Embed(title="Previous", description="[" + songQueue[pos][0] + "](" + songQueue[pos][1] + ")\n", colour=0x79A4F9)
+        await ctx.channel.send(content=None, embed=embed)
+
+@bot.command()
+async def loop(ctx):
+    global loopType
+    loopType += 1
+    if loopType >= 3:
+        loopType = 0
+    thing = ["not looping", "loop queue", "loop current song"]
+    embed = discord.Embed(title="Changed loop", description=thing[loopType], colour=0x79A4F9)
+    await ctx.channel.send(content=None, embed=embed)
+
+
+@bot.command()
+async def remove(ctx, arg: int = currentPos):
+    global songQueue
+    song = songQueue[arg - 1]
+    songQueue.pop(arg - 1)
+    global currentPos
+    if arg < currentPos:
+        currentPos -= 1
+        if currentPos < 0:
+            currentPos = len(songQueue) + currentPos
+    embed = discord.Embed(title="Removed", description="[" + song[0] + "](" + song[1] + ")\n", colour=0x79A4F9)
+    await ctx.channel.send(content=None, embed=embed)
+
+@bot.command()
+async def jump(ctx, arg: int = currentPos + 1):
+    voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
+    if voice:
+        global currentPos
+        currentPos = arg - 2
+        if currentPos >= len(songQueue):
+            currentPos = 0
+        if currentPos < 0:
+            currentPos = len(songQueue) + currentPos
+        pos = currentPos + 1
+        if pos >= len(songQueue):
+            pos = 0
+        voice.stop()
+        embed = discord.Embed(title="Previous", description="[" + songQueue[pos][0] + "](" + songQueue[pos][1] + ")\n", colour=0x79A4F9)
+        await ctx.channel.send(content=None, embed=embed)
+
+
 
 keep_alive()
 bot.run(os.getenv('token'))
