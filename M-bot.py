@@ -311,7 +311,5 @@ async def jump(ctx, arg: int = currentPos + 1):
         await ctx.channel.send(content=None, embed=embed)
 
 
-
-
 keep_alive()
 bot.run(os.getenv('token'))
