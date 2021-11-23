@@ -18,7 +18,7 @@ sortname = lambda message, init=1, end=None : " ".join(list(message[init:end]))
 songQueue = {}
 currentPos = 0
 
-loopType = 1
+loopType = {}
 YDL_OPTIONS = {'format': 'bestaudio', 'noplaylist': 'True'}
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
 
@@ -50,9 +50,9 @@ def playNext(ctx):
     global currentPos
     if voice:
         if not (voice.is_playing() or voice.is_paused()):
-            if loopType == 2:
+            if loopType[str(ctx.guild.id)] == 2:
                 voice.play(FFmpegPCMAudio(songQueue[str(ctx.guild.id)][currentPos][2], **FFMPEG_OPTIONS), after=lambda e: playNext(ctx))
-            elif loopType == 1:
+            elif loopType[str(ctx.guild.id)] == 1:
                 currentPos += 1
                 if currentPos >= len(songQueue[str(ctx.guild.id)]):
                     currentPos = 0
@@ -68,10 +68,14 @@ async def on_ready():
 async def on_message(message):
     print(message.author.name + "> " + message.content)
     messlist = list(message.content.split(" "))
+    global songQueue
+    global loopType
     try:
         songQueue[str(message.guild.id)] = songQueue[str(message.guild.id)]
+        loopType[str(message.guild.id)] = loopType[str(message.guild.id)]
     except:
         songQueue[str(message.guild.id)] = []
+        loopType[str(message.guild.id)] = 1
 
 
 
@@ -164,7 +168,7 @@ async def stop(ctx):
     voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
     if voice:
         global loopType
-        loopType = 0
+        loopType[str(ctx.guild.id)] = 0
         global songQueue
         songQueue[str(ctx.guild.id)] = []
         global currentPos
@@ -272,11 +276,11 @@ async def previous(ctx):
 @bot.command()
 async def loop(ctx):
     global loopType
-    loopType += 1
-    if loopType >= 3:
-        loopType = 0
+    loopType[str(ctx.guild.id)] += 1
+    if loopType[str(ctx.guild.id)] >= 3:
+        loopType[str(ctx.guild.id)] = 0
     thing = ["not looping", "loop queue", "loop current song"]
-    embed = discord.Embed(title="Changed loop", description=thing[loopType], colour=0x79A4F9)
+    embed = discord.Embed(title="Changed loop", description=thing[loopType[str(ctx.guild.id)]], colour=0x79A4F9)
     await ctx.channel.send(content=None, embed=embed)
 
 
@@ -309,6 +313,7 @@ async def jump(ctx, arg: int = currentPos + 1):
         voice.stop()
         embed = discord.Embed(title="Previous", description="[" + songQueue[str(ctx.guild.id)][pos][0] + "](" + songQueue[str(ctx.guild.id)][pos][1] + ")\n", colour=0x79A4F9)
         await ctx.channel.send(content=None, embed=embed)
+
 
 
 keep_alive()
