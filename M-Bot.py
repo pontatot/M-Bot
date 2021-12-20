@@ -20,7 +20,7 @@ songQueue = {}
 currentPos = 0
 
 loopType = {}
-YDL_OPTIONS = {'default_search': 'auto', 'format': 'bestaudio', 'noplaylist': True, 'nocheckcertificate': True, 'match_filter': youtube_dl.utils.match_filter_func("!is_live"), 'match_filter': youtube_dl.utils.match_filter_func("!live"), 'match_filter': youtube_dl.utils.match_filter_func("filesize")}
+YDL_OPTIONS = {'default_search': 'auto', 'format': 'bestaudio', 'noplaylist': True, 'nocheckcertificate': True, 'match_filter': youtube_dl.utils.match_filter_func("!is_live")}
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
 
 
