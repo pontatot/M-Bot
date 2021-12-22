@@ -6,6 +6,7 @@ from keep_alive import keep_alive
 from discord import FFmpegPCMAudio
 import youtube_dl
 from restartidk import restartidk
+import random
 
 bot = commands.Bot(command_prefix=">")
 
@@ -17,10 +18,10 @@ sortname = lambda message, init=1, end=None : " ".join(list(message[init:end]))
 
 
 songQueue = {}
-currentPos = 0
+currentPos = {}
 
 loopType = {}
-YDL_OPTIONS = {'default_search': 'auto', 'format': 'bestaudio', 'noplaylist': True, 'nocheckcertificate': True, 'match_filter': youtube_dl.utils.match_filter_func("!is_live")}
+YDL_OPTIONS = {'default_search': 'auto', 'format': 'bestaudio/best', 'noplaylist': 'True', 'nocheckcertificate': 'True'}
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
 
 
@@ -43,12 +44,12 @@ def playNext(ctx):
     if voice:
         if not (voice.is_playing() or voice.is_paused()):
             if loopType[str(ctx.guild.id)] == 2:
-                voice.play(FFmpegPCMAudio(songQueue[str(ctx.guild.id)][currentPos][2], **FFMPEG_OPTIONS), after=lambda e: playNext(ctx))
+                voice.play(FFmpegPCMAudio(songQueue[str(ctx.guild.id)][currentPos[str(ctx.guild.id)]][2], **FFMPEG_OPTIONS), after=lambda e: playNext(ctx))
             elif loopType[str(ctx.guild.id)] == 1:
-                currentPos += 1
-                if currentPos >= len(songQueue[str(ctx.guild.id)]):
-                    currentPos = 0
-                voice.play(FFmpegPCMAudio(songQueue[str(ctx.guild.id)][currentPos][2], **FFMPEG_OPTIONS), after=lambda e: playNext(ctx))
+                currentPos[str(ctx.guild.id)] += 1
+                if currentPos[str(ctx.guild.id)] >= len(songQueue[str(ctx.guild.id)]):
+                    currentPos[str(ctx.guild.id)] = 0
+                voice.play(FFmpegPCMAudio(songQueue[str(ctx.guild.id)][currentPos[str(ctx.guild.id)]][2], **FFMPEG_OPTIONS), after=lambda e: playNext(ctx))
 
 
 
@@ -63,12 +64,15 @@ async def on_message(message):
         messlist = list(message.content.split(" "))
         global songQueue
         global loopType
+        global currentPos
         try:
             songQueue[str(message.guild.id)] = songQueue[str(message.guild.id)]
             loopType[str(message.guild.id)] = loopType[str(message.guild.id)]
+            currentPos[str(message.guild.id)]
         except:
             songQueue[str(message.guild.id)] = []
             loopType[str(message.guild.id)] = 1
+            currentPos[str(message.guild.id)] = 0
     except:
         return
 
@@ -116,7 +120,7 @@ async def leave(ctx):
         global songQueue
         songQueue[str(ctx.guild.id)] = []
         global currentPos
-        currentPos = 0
+        currentPos[str(ctx.guild.id)] = 0
         voice.stop()
         channel = ctx.guild.voice_client
         await channel.disconnect()
@@ -163,7 +167,7 @@ async def stop(ctx):
         global songQueue
         songQueue[str(ctx.guild.id)] = []
         global currentPos
-        currentPos = 0
+        currentPos[str(ctx.guild.id)] = 0
         voice.stop()
         await ctx.channel.send(content=None, embed=mkEmbed("Stopped"))
     else:
@@ -174,6 +178,9 @@ async def stop(ctx):
 async def play(ctx, *, arg: str = ""):
     voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
     if arg != "":
+        voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
+        with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
+            info = ydl.extract_info(arg, download=False)
         if not voice:
             if ctx.author.voice:
                 channel = ctx.author.voice.channel
@@ -183,20 +190,28 @@ async def play(ctx, *, arg: str = ""):
             else:
                 await ctx.channel.send(content=None, embed=mkEmbed("Currently not in a voice channel", "join a voice channel or make me join"))
                 return
-        voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
-        if voice:
-            with youtube_dl.YoutubeDL(YDL_OPTIONS) as ydl:
-                info = ydl.extract_info(arg, download=False)
-            try:
-                songQueue[str(ctx.guild.id)].append([info['title'], "https://youtu.be/" + info['id'], info['url']])
-                playNext(ctx)
-            except:
-                info = info['entries'][0]
-                songQueue[str(ctx.guild.id)].append([info['title'], "https://youtu.be/" + info['id'], info['url']])
-                playNext(ctx)
-            embed = mkEmbed("Now playing", "[" + info['title'] + "](https://youtu.be/" + info['id'] + ")\nin " + ctx.guild.voice_client.channel.mention)
-            embed.set_thumbnail(url=info["thumbnail"])
+        global songQueue
+        try:
+            songQueue[str(ctx.guild.id)].append([info['title'], "https://youtu.be/" + info['id'], info['url']])
+            embed = mkEmbed("Queued", "[" + info['title'] + "](https://youtu.be/" + info['id'] + ")")
+            embed.set_thumbnail(url=info["thumbnails"][0])
             await ctx.channel.send(content=None, embed=embed)
+            playNext(ctx)
+        except:
+            result = [""]
+            index = 0
+            for i in range(len(info['entries'])):
+                localinfo = info['entries'][i]
+                songQueue[str(ctx.guild.id)].append([localinfo['title'], "https://youtu.be/" + localinfo['id'], localinfo['url']])
+                if len(result[index]) >= 5500:
+                    index += 1
+                    result.append("")
+                result[index] += "-Queued [" + localinfo['title'] + "](https://youtu.be/" + localinfo['id'] + ")\n"
+            for i in result:
+                embed = mkEmbed("", i)
+                await ctx.channel.send(content=None, embed=embed)
+            playNext(ctx)
+        
 
 
 
@@ -226,7 +241,7 @@ async def queue(ctx):
     queue = ""
     if len(songQueue[str(ctx.guild.id)]) > 0:
         for i in range(len(songQueue[str(ctx.guild.id)])):
-            if i == currentPos:
+            if i == currentPos[str(ctx.guild.id)]:
                 queue += "**__" + str(i + 1) + ") [" + songQueue[str(ctx.guild.id)][i][0] + "](" + songQueue[str(ctx.guild.id)][i][1] + ")__**\n"
             else:
                 queue += str(i + 1) + ") [" + songQueue[str(ctx.guild.id)][i][0] + "](" + songQueue[str(ctx.guild.id)][i][1] + ")\n"
@@ -239,7 +254,7 @@ async def queue(ctx):
 async def skip(ctx):
     voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
     if voice:
-        pos = currentPos + 1
+        pos = currentPos[str(ctx.guild.id)] + 1
         if pos >= len(songQueue[str(ctx.guild.id)]):
             pos = 0
         voice.stop()
@@ -250,10 +265,10 @@ async def previous(ctx):
     voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
     if voice:
         global currentPos
-        currentPos -= 2
-        if currentPos < 0:
-            currentPos = len(songQueue[str(ctx.guild.id)]) + currentPos
-        pos = currentPos + 1
+        currentPos[str(ctx.guild.id)] -= 2
+        if currentPos[str(ctx.guild.id)] < 0:
+            currentPos[str(ctx.guild.id)] = len(songQueue[str(ctx.guild.id)]) + currentPos[str(ctx.guild.id)]
+        pos = currentPos[str(ctx.guild.id)] + 1
         if pos >= len(songQueue[str(ctx.guild.id)]):
             pos = 0
         voice.stop()
@@ -270,28 +285,28 @@ async def loop(ctx):
 
 
 @bot.command()
-async def remove(ctx, arg: int = currentPos + 1):
+async def remove(ctx, arg: int = 0):
     global songQueue
     song = songQueue[str(ctx.guild.id)][arg - 1]
     songQueue[str(ctx.guild.id)].pop(arg - 1)
     global currentPos
-    if arg < currentPos:
-        currentPos -= 1
-        if currentPos < 0:
-            currentPos = len(songQueue[str(ctx.guild.id)]) + currentPos
+    if arg < currentPos[str(ctx.guild.id)]:
+        currentPos[str(ctx.guild.id)] -= 1
+        if currentPos[str(ctx.guild.id)] < 0:
+            currentPos[str(ctx.guild.id)] = len(songQueue[str(ctx.guild.id)]) + currentPos[str(ctx.guild.id)]
     await ctx.channel.send(content=None, embed=mkEmbed("Removed", "[" + song[0] + "](" + song[1] + ")\n"))
 
 @bot.command()
-async def jump(ctx, arg: int = currentPos + 1):
+async def jump(ctx, arg: int = currentPos[str(ctx.guild.id)] + 1):
     voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
     if voice:
         global currentPos
-        currentPos = arg - 2
-        if currentPos >= len(songQueue[str(ctx.guild.id)]):
-            currentPos = 0
-        if currentPos < 0:
-            currentPos = len(songQueue[str(ctx.guild.id)]) + currentPos
-        pos = currentPos + 1
+        currentPos[str(ctx.guild.id)] = arg - 2
+        if currentPos[str(ctx.guild.id)] >= len(songQueue[str(ctx.guild.id)]):
+            currentPos[str(ctx.guild.id)] = 0
+        if currentPos[str(ctx.guild.id)] < 0:
+            currentPos[str(ctx.guild.id)] = len(songQueue[str(ctx.guild.id)]) + currentPos[str(ctx.guild.id)]
+        pos = currentPos[str(ctx.guild.id)] + 1
         if pos >= len(songQueue[str(ctx.guild.id)]):
             pos = 0
         voice.stop()
@@ -304,9 +319,14 @@ async def restart(ctx):
 @bot.command()
 async def fixplay(ctx):
     global currentPos
-    currentPos = 0
+    currentPos[str(ctx.guild.id)] = 0
     playNext(ctx)
 
+@bot.command()
+async def shuffle(ctx):
+    global songQueue
+    random.shuffle(songQueue[str(ctx.guild.id)])
+    await ctx.channel.send(content=None, embed=mkEmbed("Shuffled the queue"))
 
 keep_alive()
 bot.run(os.getenv('token'))
