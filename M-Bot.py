@@ -43,6 +43,11 @@ def playNext(ctx):
     global currentPos
     if voice:
         if not (voice.is_playing() or voice.is_paused()):
+            while currentPos[str(ctx.guild.id)] < 0 or currentPos[str(ctx.guild.id)] >= len(songQueue[str(ctx.guild.id)]):
+                if currentPos[str(ctx.guild.id)] < 0:
+                    currentPos[str(ctx.guild.id)] = len(songQueue[str(ctx.guild.id)]) + currentPos[str(ctx.guild.id)]
+                if currentPos[str(ctx.guild.id)] >= len(songQueue[str(ctx.guild.id)]):
+                    currentPos[str(ctx.guild.id)] = len(songQueue[str(ctx.guild.id)]) - currentPos[str(ctx.guild.id)]
             if loopType[str(ctx.guild.id)] == 2:
                 voice.play(FFmpegPCMAudio(songQueue[str(ctx.guild.id)][currentPos[str(ctx.guild.id)]][2], **FFMPEG_OPTIONS), after=lambda e: playNext(ctx))
             elif loopType[str(ctx.guild.id)] == 1:
@@ -191,18 +196,20 @@ async def play(ctx, *, arg: str = ""):
                 await ctx.channel.send(content=None, embed=mkEmbed("Currently not in a voice channel", "join a voice channel or make me join"))
                 return
         global songQueue
+        global currentPos
         try:
-            songQueue[str(ctx.guild.id)].append([info['title'], "https://youtu.be/" + info['id'], info['url']])
+            songQueue[str(ctx.guild.id)].append([info['title'], "https://youtu.be/" + info['id'], info['url'], info["thumbnails"][0]['url']])
             embed = mkEmbed("Queued", "[" + info['title'] + "](https://youtu.be/" + info['id'] + ")")
             embed.set_thumbnail(url=info["thumbnails"][0])
             await ctx.channel.send(content=None, embed=embed)
+            currentPos[str(ctx.guild.id)] -= 1
             playNext(ctx)
         except:
             result = [""]
             index = 0
             for i in range(len(info['entries'])):
                 localinfo = info['entries'][i]
-                songQueue[str(ctx.guild.id)].append([localinfo['title'], "https://youtu.be/" + localinfo['id'], localinfo['url']])
+                songQueue[str(ctx.guild.id)].append([localinfo['title'], "https://youtu.be/" + localinfo['id'], localinfo['url'], localinfo["thumbnails"][0]['url']])
                 if len(result[index]) >= 5500:
                     index += 1
                     result.append("")
@@ -210,6 +217,7 @@ async def play(ctx, *, arg: str = ""):
             for i in result:
                 embed = mkEmbed("", i)
                 await ctx.channel.send(content=None, embed=embed)
+            currentPos[str(ctx.guild.id)] -= 1
             playNext(ctx)
         
 
@@ -258,7 +266,9 @@ async def skip(ctx):
         if pos >= len(songQueue[str(ctx.guild.id)]):
             pos = 0
         voice.stop()
-        await ctx.channel.send(content=None, embed=mkEmbed("Skipped", "[" + songQueue[str(ctx.guild.id)][pos][0] + "](" + songQueue[str(ctx.guild.id)][pos][1] + ")\n"))
+        embed = mkEmbed("Skipped", "[" + songQueue[str(ctx.guild.id)][pos][0] + "](" + songQueue[str(ctx.guild.id)][pos][1] + ")\n")
+        embed.set_thumbnail(url=songQueue[str(ctx.guild.id)][pos][3])
+        await ctx.channel.send(content=None, embed=embed)
 
 @bot.command()
 async def previous(ctx):
@@ -272,7 +282,9 @@ async def previous(ctx):
         if pos >= len(songQueue[str(ctx.guild.id)]):
             pos = 0
         voice.stop()
-        await ctx.channel.send(content=None, embed=mkEmbed("Previous", "[" + songQueue[str(ctx.guild.id)][pos][0] + "](" + songQueue[str(ctx.guild.id)][pos][1] + ")\n"))
+        embed = mkEmbed("Previous", "[" + songQueue[str(ctx.guild.id)][pos][0] + "](" + songQueue[str(ctx.guild.id)][pos][1] + ")\n")
+        embed.set_thumbnail(url=songQueue[str(ctx.guild.id)][pos][3])
+        await ctx.channel.send(content=None, embed=embed)
 
 @bot.command()
 async def loop(ctx):
@@ -294,10 +306,12 @@ async def remove(ctx, arg: int = 0):
         currentPos[str(ctx.guild.id)] -= 1
         if currentPos[str(ctx.guild.id)] < 0:
             currentPos[str(ctx.guild.id)] = len(songQueue[str(ctx.guild.id)]) + currentPos[str(ctx.guild.id)]
-    await ctx.channel.send(content=None, embed=mkEmbed("Removed", "[" + song[0] + "](" + song[1] + ")\n"))
+    embed = mkEmbed("Removed", "[" + song[0] + "](" + song[1] + ")\n")
+    embed.set_thumbnail(url=song[3])
+    await ctx.channel.send(content=None, embed=embed)
 
 @bot.command()
-async def jump(ctx, arg: int = currentPos[str(ctx.guild.id)] + 1):
+async def jump(ctx, arg: int = 0):
     voice = discord.utils.get(bot.voice_clients, guild=ctx.channel.guild)
     if voice:
         global currentPos
@@ -310,7 +324,9 @@ async def jump(ctx, arg: int = currentPos[str(ctx.guild.id)] + 1):
         if pos >= len(songQueue[str(ctx.guild.id)]):
             pos = 0
         voice.stop()
-        await ctx.channel.send(content=None, embed=mkEmbed("Jumped to song" + str(arg), "[" + songQueue[str(ctx.guild.id)][pos][0] + "](" + songQueue[str(ctx.guild.id)][pos][1] + ")\n"))
+        embed = mkEmbed("Jumped to song" + str(arg), "[" + songQueue[str(ctx.guild.id)][pos][0] + "](" + songQueue[str(ctx.guild.id)][pos][1] + ")\n")
+        embed.set_thumbnail(url=songQueue[str(ctx.guild.id)][pos][3])
+        await ctx.channel.send(content=None, embed=embed)
 
 @bot.command()
 async def restart(ctx):
@@ -327,6 +343,13 @@ async def shuffle(ctx):
     global songQueue
     random.shuffle(songQueue[str(ctx.guild.id)])
     await ctx.channel.send(content=None, embed=mkEmbed("Shuffled the queue"))
+
+@bot.command()
+async def np(ctx):
+    if len(songQueue[str(ctx.guild.id)]) > 0: 
+        embed = mkEmbed("Now playing", "[" + songQueue[str(ctx.guild.id)][currentPos[str(ctx.guild.id)]][0] + "](" + songQueue[str(ctx.guild.id)][currentPos[str(ctx.guild.id)]][1] + ")")
+        embed.set_thumbnail(url=songQueue[str(ctx.guild.id)][currentPos[str(ctx.guild.id)]][3])
+        await ctx.channel.send(content=None, embed=embed)
 
 keep_alive()
 bot.run(os.getenv('token'))
