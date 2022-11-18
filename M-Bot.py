@@ -2,7 +2,6 @@ import os
 import discord
 from discord.ext import commands
 import json
-from keep_alive import keep_alive
 from discord import FFmpegPCMAudio
 import youtube_dl
 from restartidk import restartidk
@@ -351,5 +350,4 @@ async def np(ctx):
         embed.set_thumbnail(url=songQueue[str(ctx.guild.id)][currentPos[str(ctx.guild.id)]][3])
         await ctx.channel.send(content=None, embed=embed)
 
-keep_alive()
 bot.run(os.getenv('token'))
